@@ -54,8 +54,8 @@ const typeDefs = `
 
 const resolvers = {
   Author: {
-    bookCount: (root) => {
-      return Book.filter((b) => b.author === root.name).length
+    bookCount: async (root) => {
+      return Book.find({ author: root}).countDocuments()
     },
   },
 
@@ -63,18 +63,18 @@ const resolvers = {
     bookCount: async () => Book.collection.countDocuments(),
     authorCount: async () => Author.collection.countDocuments(),
     allBooks: async (root, args) => {
-      // if (args.author && args.genre) {
-      //   return Book.find({ author: args.author })
-      //   // (b) => b.author === args.author && b.genres.includes(args.genre)
-      // }
-      // if (args.author) {
-      //   return Book.find({ author: args.author })
-      // }
-      // if (args.genre) {
-      //   // return books.filter((b) => b.genres.includes(args.genre))
-      //   return Book.find({ genres: args.genre })
-      // }
-      return Book.find({})
+      if (args.author && args.genre) {
+        const author = await Author.findOne({name: args.author})
+        return Book.find({ author: author, genres: args.genre })
+      }
+      if (args.author) {
+        const author = await Author.findOne({name: args.author})
+        return Book.find({ author: author })
+      }
+      if (args.genre) {
+        return Book.find({ genres: args.genre })
+      }
+      return Book.find({}).populate('author')
     },
     allAuthors: async (root, args) => {
       return Author.find({})
@@ -83,8 +83,8 @@ const resolvers = {
 
   Mutation: {
     addBook: async (root, args) => {
-      console.log('------', Book.findOne({ title: args.title }).title)
-      if (Book.findOne({ title: args.title })) {
+      const bookExists = await Book.findOne({title: args.title})
+      if (bookExists) {
         throw new GraphQLError('This book is already added', {
           extensions: {
             code: 'EXISTING_BOOK_TITLE',
@@ -92,16 +92,18 @@ const resolvers = {
           },
         })
       }
-      if (!Author.findOne({ name: args.author })) {
+      if (!(await Author.findOne({name: args.author}))) {
         const author = new Author({ name: args.author })
         await author.save()
       }
-      const book = new Book({ ...args })
+      const author = await Author.findOne({name: args.author})
+      const book = new Book({ ...args, author: author })
+
       await book.save()
       return book
     },
-    editAuthor: (root, args) => {
-      const author = Author.findOne({ name: args.name })
+    editAuthor: async (root, args) => {
+      const author = await Author.findOne({ name: args.name })
       if (!author) {
         return null
       }
