@@ -1,14 +1,56 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  Navigate,
+} from 'react-router-dom'
+import { useApolloClient, useQuery, useSubscription } from '@apollo/client'
 
-import Authors from './components/Authors'
-import Books from './components/Books'
-import NewBook from './components/NewBook'
+import { ALL_BOOKS, ALL_AUTHORS, ME, BOOK_ADDED } from './queries'
+
+import Authors from './routes/Authors'
+import Books from './routes/Books'
+import NewBook from './routes/NewBook'
+import LoginForm from './routes/LoginForm'
+import Recommendations from './routes/Recommendations'
 
 const App = () => {
   const [error, setError] = useState(null)
+  const [token, setToken] = useState(localStorage.getItem('login-token'))
 
-  const notify = (message) => {
+  const booksResult = useQuery(ALL_BOOKS)
+  const authorsResult = useQuery(ALL_AUTHORS)
+  const userResult = useQuery(ME)
+
+  useSubscription(BOOK_ADDED, {
+    onData: ({ data }) => {
+      const addedBook = data.data.bookAdded
+      window.alert(`${addedBook.title} added!`)
+
+      client.cache.updateQuery({ query: ALL_BOOKS }, ({ allBooks }) => {
+        return {
+          allBooks: allBooks.concat(addedBook),
+        }
+      })
+    },
+  })
+
+  const client = useApolloClient() //reset the cache
+
+  if (booksResult.loading || authorsResult.loading || userResult.loading) {
+    return <>loading...</>
+  }
+
+  const logout = () => {
+    setToken(null)
+    localStorage.clear()
+    client.resetStore()
+    alert('logged out')
+  }
+
+  const setErrorTimeout = (message) => {
     setError(message)
     setTimeout(() => {
       setError(null)
@@ -27,19 +69,58 @@ const App = () => {
         <Link style={padding} to="/authors">
           Authors
         </Link>
-        <Link style={padding} to="books">
+        <Link style={padding} to="/books">
           Books
         </Link>
-        <Link style={padding} to="add">
-          Add book
-        </Link>
+        {!token && (
+          <Link style={padding} to="/login">
+            Login
+          </Link>
+        )}
+        {token && (
+          <>
+            <Link style={padding} to="/add">
+              Add book
+            </Link>
+            <Link style={padding} to="/recommend">
+              Recommend
+            </Link>
+            <Link style={padding} onClick={logout} to="/">
+              logout
+            </Link>
+          </>
+        )}
       </div>
 
       <Routes>
-        <Route path="/" element={<h2>Main page</h2>} />
-        <Route path="/authors" element={<Authors setError={notify} />} />
-        <Route path="/books" element={<Books />} />
-        <Route path="/add" element={<NewBook />} />
+        <Route path="/" element={<h2>Library app</h2>} />
+        <Route
+          path="/authors"
+          element={
+            <Authors
+              setError={setErrorTimeout}
+              authors={authorsResult.data.allAuthors}
+              token={token}
+            />
+          }
+        />
+        <Route
+          path="/books"
+          element={<Books books={booksResult.data.allBooks} />}
+        />
+        <Route
+          path="/login"
+          element={
+            <LoginForm
+              setError={setErrorTimeout}
+              setToken={setToken}
+              refetch={userResult.refetch}
+            />
+          }
+        />
+        <Route path="/add" element={<NewBook setError={setErrorTimeout} />} />
+        <Route path="/recommend" element={<Recommendations />} />
+        <Route path="*" element={<Navigate replace to="/" />} />
       </Routes>
     </Router>
   )

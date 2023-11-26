@@ -7,13 +7,12 @@ const schema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    minlength: 4,
+    minlength: 3,
   },
-  born: {
-    type: Number,
-  },
+  born: { type: Number },
 })
 
 schema.plugin(uniqueValidator)
 
 module.exports = mongoose.model('Author', schema)
+
